@@ -22,7 +22,7 @@ public class RBSChooser2 {
     public void initiate() throws Exception {
         //Read the data file
         String data = FileUtils.readResourceFile("composition/data/coli_genes.txt");
-
+        
         //TODO:  Fill in
     }
 
