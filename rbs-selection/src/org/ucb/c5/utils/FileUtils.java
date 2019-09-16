@@ -24,8 +24,8 @@ public class FileUtils {
      * dump an InputStream, returning a newly created byte[] array
      * @author Kelvin Li
      */
-    public static byte[] dumpInputStream(InputStream instream) 
-                                        throws IOException {
+    public static byte[] dumpInputStream(InputStream instream)
+            throws IOException {
         int lastindex = 0;
         int increment;
         byte[] A = new byte[2048];
@@ -69,17 +69,17 @@ public class FileUtils {
     }
 
     public static void writeFile(String datafile, String filePath) throws Exception {
-            Writer output = null;
-            File file = new File(filePath);
-            output = new FileWriter(file);
-            output.write(datafile);
-            output.close();
+        Writer output = null;
+        File file = new File(filePath);
+        output = new FileWriter(file);
+        output.write(datafile);
+        output.close();
     }
 
    /**
     * Convenience method to determine the filepath of the persisted data.
-    * @param feature
-    * @return 
+    * @param fileName, DBName
+    * @return
     */
     public static String getFilePath(String fileName, String DBName) {
         File afile = new File(DBName);

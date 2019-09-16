@@ -1,9 +1,9 @@
 package org.ucb.c5.composition;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+
 import org.ucb.c5.composition.model.RBSOption;
+import org.ucb.c5.sequtils.Translate;
 import org.ucb.c5.utils.FileUtils;
 
 /**
@@ -20,9 +20,33 @@ public class RBSChooser2 {
     //TODO:  Fill in
 
     public void initiate() throws Exception {
-        //Read the data file
-        String data = FileUtils.readResourceFile("composition/data/coli_genes.txt");
-        
+        rbss = new ArrayList<>();
+        String coli_genes = FileUtils.readFile("src/org/ucb/c5/composition/data/coli_genes.txt");
+        String[] lines = coli_genes.split("\\r|\\r?\\n");
+        Map<String, String> nameToCds = new HashMap<>();
+        for (String line: lines) {
+            String[] values = line.split("\t");
+            String name = values[1];
+            String cds = values[6];
+            nameToCds.put(name, cds);
+        }
+        String rbs_options = FileUtils.readFile("src/org/ucb/c5/composition/data/rbs_options.txt");
+        lines = rbs_options.split("\\r|\\r?\\n");
+        Translate translator = new Translate();
+        translator.initiate();
+        for (String line: lines) {
+            String[] values = line.split("\t");
+            String name =  values[0];
+            String rbs = values[1];
+            String cds = nameToCds.get(name);
+            StringBuilder first6aas = new StringBuilder();
+            for (int j = 0; j < 6; j++) {
+                String aa = translator.run(cds.substring(3 * j, 3 * j + 3));
+                first6aas.append(aa);
+            }
+            rbss.add(new RBSOption(name, null, rbs, cds, first6aas.toString()));
+        }
+        System.out.println("hello world");
         //TODO:  Fill in
     }
 
