@@ -3,6 +3,7 @@ package org.ucb.c5.composition;
 import java.util.*;
 
 import org.ucb.c5.composition.model.RBSOption;
+import org.ucb.c5.sequtils.HairpinCounter;
 import org.ucb.c5.sequtils.Translate;
 import org.ucb.c5.utils.FileUtils;
 
@@ -17,10 +18,13 @@ import org.ucb.c5.utils.FileUtils;
 public class RBSChooser2 {
 
     private List<RBSOption> rbss;
-    //TODO:  Fill in
+    private Translate translator;
 
     public void initiate() throws Exception {
         rbss = new ArrayList<>();
+        translator = new Translate();
+        translator.initiate();
+
         String coli_genes = FileUtils.readFile("src/org/ucb/c5/composition/data/coli_genes.txt");
         String[] lines = coli_genes.split("\\r|\\r?\\n");
         Map<String, String> nameToCds = new HashMap<>();
@@ -30,24 +34,26 @@ public class RBSChooser2 {
             String cds = values[6];
             nameToCds.put(name, cds);
         }
+
         String rbs_options = FileUtils.readFile("src/org/ucb/c5/composition/data/rbs_options.txt");
         lines = rbs_options.split("\\r|\\r?\\n");
-        Translate translator = new Translate();
-        translator.initiate();
         for (String line: lines) {
             String[] values = line.split("\t");
             String name =  values[0];
             String rbs = values[1];
             String cds = nameToCds.get(name);
-            StringBuilder first6aas = new StringBuilder();
-            for (int j = 0; j < 6; j++) {
-                String aa = translator.run(cds.substring(3 * j, 3 * j + 3));
-                first6aas.append(aa);
-            }
-            rbss.add(new RBSOption(name, null, rbs, cds, first6aas.toString()));
+            String first6aas = getFirst6aas(cds, translator);
+            rbss.add(new RBSOption(name, null, rbs, cds, first6aas));
         }
-        System.out.println("hello world");
-        //TODO:  Fill in
+    }
+
+    private String getFirst6aas(String cds, Translate translator) {
+        StringBuilder aas = new StringBuilder();
+        for (int i = 0; i < 6; i++) {
+            String aa = translator.run(cds.substring(3 * i, 3 * i + 3));
+            aas.append(aa);
+        }
+        return aas.toString();
     }
 
     /**
@@ -58,13 +64,52 @@ public class RBSChooser2 {
      *
      * @param cds The DNA sequence, ie ATGCATGAT...
      * @param ignores The list of RBS's to exclude
-     * @return
-     * @throws Exception
+     * @return The optimal ribosome binding site
+     * @throws Exception when cds is an invalid DNA sequence
      */
     public RBSOption run(String cds, Set<RBSOption> ignores) throws Exception {
-        //TODO:  Fill in
-        
-        return null;
+        if (!cds.matches("([ATCG])+"))
+            throw new Exception();
+        Map<Integer, List<RBSOption>> RbsScores = new HashMap<>();
+        for (RBSOption rbs: rbss) {
+            if (ignores.contains(rbs)) {
+                continue;
+            }
+            String cdsFirst6aas = getFirst6aas(cds, translator);
+            String rbsFirst6aas = rbs.getFirst6aas();
+            int score = 0;
+            for (int i = 0; i < 6; i++) {
+                if (cdsFirst6aas.charAt(i) == rbsFirst6aas.charAt(i)) {
+                    score++;
+                }
+            }
+            if (!RbsScores.containsKey(score)) {
+                List<RBSOption> rbsList = new ArrayList<>();
+                rbsList.add(rbs);
+                RbsScores.put(score, rbsList);
+            } else {
+                RbsScores.get(score).add(rbs);
+            }
+        }
+        List<RBSOption> bestMatchRbss = new ArrayList<>();
+        for (int i = 6; i >= 0; i--) {
+            if (RbsScores.containsKey(i)) {
+                bestMatchRbss = RbsScores.get(i);
+                break;
+            }
+        }
+        double leastHairpins = Double.POSITIVE_INFINITY;
+        RBSOption bestRbs = null;
+        HairpinCounter counter = new HairpinCounter();
+        counter.initiate();
+        for (RBSOption rbs: bestMatchRbss) {
+            double hairpins = counter.run(rbs.getRbs());
+            if (hairpins < leastHairpins) {
+                leastHairpins = hairpins;
+                bestRbs = rbs;
+            }
+        }
+        return bestRbs;
     }
 
 
