@@ -3,6 +3,7 @@ package org.ucb.c5.composition;
 import java.util.*;
 
 import org.ucb.c5.composition.model.RBSOption;
+import org.ucb.c5.sequtils.CalcEditDistance;
 import org.ucb.c5.sequtils.HairpinCounter;
 import org.ucb.c5.sequtils.Translate;
 import org.ucb.c5.utils.FileUtils;
@@ -71,28 +72,25 @@ public class RBSChooser2 {
         if (!cds.matches("([ATCG])+"))
             throw new Exception();
         Map<Integer, List<RBSOption>> RbsScores = new HashMap<>();
+        CalcEditDistance calc = new CalcEditDistance();
+        calc.initiate();
         for (RBSOption rbs: rbss) {
             if (ignores.contains(rbs)) {
                 continue;
             }
             String cdsFirst6aas = getFirst6aas(cds, translator);
             String rbsFirst6aas = rbs.getFirst6aas();
-            int score = 0;
-            for (int i = 0; i < 6; i++) {
-                if (cdsFirst6aas.charAt(i) == rbsFirst6aas.charAt(i)) {
-                    score++;
-                }
-            }
-            if (!RbsScores.containsKey(score)) {
+            int editDist = calc.run(cdsFirst6aas, rbsFirst6aas);
+            if (!RbsScores.containsKey(editDist)) {
                 List<RBSOption> rbsList = new ArrayList<>();
                 rbsList.add(rbs);
-                RbsScores.put(score, rbsList);
+                RbsScores.put(editDist, rbsList);
             } else {
-                RbsScores.get(score).add(rbs);
+                RbsScores.get(editDist).add(rbs);
             }
         }
         List<RBSOption> bestMatchRbss = new ArrayList<>();
-        for (int i = 6; i >= 0; i--) {
+        for (int i = 0; i < 7; i++) {
             if (RbsScores.containsKey(i)) {
                 bestMatchRbss = RbsScores.get(i);
                 break;
