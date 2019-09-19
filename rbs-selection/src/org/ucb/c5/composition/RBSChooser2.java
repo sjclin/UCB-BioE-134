@@ -20,11 +20,14 @@ public class RBSChooser2 {
 
     private List<RBSOption> rbss;
     private Translate translator;
+    private CalcEditDistance calc;
 
     public void initiate() throws Exception {
         rbss = new ArrayList<>();
         translator = new Translate();
         translator.initiate();
+        calc = new CalcEditDistance();
+        calc.initiate();
 
         String coli_genes = FileUtils.readFile("src/org/ucb/c5/composition/data/coli_genes.txt");
         String[] lines = coli_genes.split("\\r|\\r?\\n");
@@ -72,8 +75,6 @@ public class RBSChooser2 {
         if (!cds.matches("([ATCG])+"))
             throw new Exception();
         Map<Integer, List<RBSOption>> RbsScores = new HashMap<>();
-        CalcEditDistance calc = new CalcEditDistance();
-        calc.initiate();
         for (RBSOption rbs: rbss) {
             if (ignores.contains(rbs)) {
                 continue;
