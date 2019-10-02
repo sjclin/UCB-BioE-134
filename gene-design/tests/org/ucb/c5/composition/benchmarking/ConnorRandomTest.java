@@ -262,8 +262,8 @@ public class ConnorRandomTest {
         System.out.println("Internal RBS Errors: " + Internal_RBS_Errors);
         System.out.println("Methinione First Residue Errors: " + M_Test_Errors);
         System.out.println("Constitutive Promoter Errors: " + Constitutive_promoter_Errors);
-        System.out.print("Sequence with Repeat Errors: " + Repeated_Sequence_Errors);
-        System.out.print("Sequence with RNA Interference Error: " + RNA_Interference_Sequence_Errors);
+        System.out.println("Sequence with Repeat Errors: " + Repeated_Sequence_Errors);
+        System.out.println("Sequence with RNA Interference Error: " + RNA_Interference_Sequence_Errors);
 
         //List of Error Type & Sequence which error occured
         System.out.println(errorReasons);

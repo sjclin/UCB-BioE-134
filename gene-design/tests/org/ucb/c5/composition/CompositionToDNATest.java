@@ -129,7 +129,7 @@ public class CompositionToDNATest {
      * Perform a correctness test on CompositionToDNA class
      */
     @Test
-    public void illigalDnaSeqTest() throws Exception {
+    public void illegalDnaSeqTest() throws Exception {
         String promoter = "ttatgacaacttgacggctacatcattcactttttcttcacaa";
         String terminator = "TGCCTGGCGGCAGTAGCGCGGTGGTCCCACCTGACCCCATGCC";
         String protein = "MYPFIRTARMTVCAKKHVHLTRDAAEQLLADIDRRLDQLLPVE";

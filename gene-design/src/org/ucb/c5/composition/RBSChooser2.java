@@ -73,7 +73,7 @@ public class RBSChooser2 {
      */
     public RBSOption run(String cds, Set<RBSOption> ignores) throws Exception {
         if (!cds.matches("([ATCG])+"))
-            throw new Exception();
+            throw new IllegalArgumentException();
         Map<Integer, List<RBSOption>> RbsScores = new HashMap<>();
         for (RBSOption rbs: rbss) {
             if (ignores.contains(rbs)) {

@@ -78,7 +78,8 @@ public class FileUtils {
 
    /**
     * Convenience method to determine the filepath of the persisted data.
-    * @param feature
+    * @param fileName
+    * @param DBName
     * @return 
     */
     public static String getFilePath(String fileName, String DBName) {
