@@ -1,6 +1,7 @@
 package org.ucb.c5.composition;
 
 import javafx.util.Pair;
+import org.ucb.c5.composition.checkers.ForbiddenSequenceChecker;
 import org.ucb.c5.composition.model.RBSOption;
 import org.ucb.c5.composition.model.Transcript;
 import org.ucb.c5.sequtils.Translate;
@@ -13,112 +14,116 @@ import java.util.*;
  * uses the highest CAI codon for each amino acid in the specified Host.
  *
  * @author J. Christopher Anderson
+ * @author Stephen Lin
  */
 public class TranscriptDesigner {
 
-    private Map<Character, String> aminoAcidToCodon;
     private RBSChooser2 rbsChooser;
     private Translate translator;
-    private Map<String, List<Pair<String, Double>>> aaMap;
-    private Map<String, List<Double>> aaToCumulativeFrequencies;
+    private ForbiddenSequenceChecker forbiddenSeqChecker;
+    private Map<Character, String[]> aaMap;
+    private String aaCharacters;
 
     public void initiate() throws Exception {
         //Initialize the RBSChooser
         rbsChooser = new RBSChooser2();  //Use new algorithm to choose RBS
         rbsChooser.initiate();
-        
-        //Construct a map between each amino acid and the highest-CAI codon for E coli
-        aminoAcidToCodon = new HashMap<>();
 
-        aminoAcidToCodon.put('A', "GCG");
-        aminoAcidToCodon.put('C', "TGC");
-        aminoAcidToCodon.put('D', "GAT");
-        aminoAcidToCodon.put('E', "GAA");
-        aminoAcidToCodon.put('F', "TTC");
-        aminoAcidToCodon.put('G', "GGT");
-        aminoAcidToCodon.put('H', "CAC");
-        aminoAcidToCodon.put('I', "ATC");
-        aminoAcidToCodon.put('K', "AAA");
-        aminoAcidToCodon.put('L', "CTG");
-        aminoAcidToCodon.put('M', "ATG");
-        aminoAcidToCodon.put('N', "AAC");
-        aminoAcidToCodon.put('P', "CCG");
-        aminoAcidToCodon.put('Q', "CAG");
-        aminoAcidToCodon.put('R', "CGT");
-        aminoAcidToCodon.put('S', "TCT");
-        aminoAcidToCodon.put('T', "ACC");
-        aminoAcidToCodon.put('V', "GTT");
-        aminoAcidToCodon.put('W', "TGG");
-        aminoAcidToCodon.put('Y', "TAC");
-
-        String codonFrequencies = FileUtils.readFile("src/org/ucb/c5/composition/data/codon_usage.txt");
-        String[] lines = codonFrequencies.split("\\r|\\r?\\n");
         translator = new Translate();
         translator.initiate();
+
+        forbiddenSeqChecker = new ForbiddenSequenceChecker();
+        forbiddenSeqChecker.initiate();
+
         aaMap = new HashMap<>();
-        for (String line: lines) {
-            String[] values = line.split("\t");
-            String codon = values[0];
-            String aa = values[1];
-            double frequency = Double.parseDouble(values[2]);
-            Pair<String, Double> entry = new Pair<>(codon, frequency);
-            if (!aaMap.containsKey(aa)) {
-                aaMap.put(aa, new ArrayList<>());
-            }
-            aaMap.get(aa).add(entry);
+        Character[] aminoAcids = new Character[]{'A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I',
+                                           'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V'};
+        String[][] codons = new String[][]{{"GCA", "GCT", "GCC", "GCG"}, {"AGA", "AGG", "CGA", "CGT", "CGC", "CGG"},
+            {"AAT", "AAC"}, {"GAT", "GAC"}, {"TGT", "TGC"}, {"CAA", "CAG"}, {"GAA", "GAG"}, {"GGA", "GGT", "GGC", "GGG"},
+            {"CAT", "CAC"}, {"ATA", "ATT", "ATC"}, {"TTA", "TTG", "CTA", "CTT", "CTC", "CTG"}, {"AAA", "AAG"}, {"ATG"},
+            {"TTT", "TTC"}, {"CCA", "CCT", "CCC", "CCG"}, {"AGT", "AGC", "TCA", "TCT", "TCC", "TCG"},
+            {"ACA", "ACT", "ACC", "ACG"}, {"TGG"}, {"TAT", "TAC"}, {"GTA", "GTT", "GTC", "GTG"}};
+        for (int i = 0; i < 20; i++) {
+            aaMap.put(aminoAcids[i], codons[i]);
         }
 
-        aaToCumulativeFrequencies = new HashMap<>();
-        for (String aa: aaMap.keySet()) {
-            List<Double> cumulativeSums = new ArrayList<>();
-            double currSum = 0;
-            for (Pair<String, Double> entry: aaMap.get(aa)) {
-                double entryValue = entry.getValue();
-                cumulativeSums.add(currSum + entryValue);
-                currSum += entryValue;
-            }
-            cumulativeSums.set(cumulativeSums.size() - 1, 1.0);
-            aaToCumulativeFrequencies.put(aa, cumulativeSums);
-        }
+        aaCharacters = "([ARNDCQEGHILKMFPSTWYV])+";
     }
 
-    private String getCodon(String aa, Random rng) throws IllegalArgumentException {
-        if (!aaMap.containsKey(aa)) {
-            throw new IllegalArgumentException("Illegal character " + aa + " in peptide string");
+    public Transcript run(String peptide, Set<RBSOption> ignores) throws Exception {
+        //Choose codons for each amino acid to generate cds
+        if (!peptide.matches(aaCharacters)) {
+            throw new IllegalArgumentException("peptide contains non-amino acid character");
         }
-        List<Double> cumulativeFrequencies = aaToCumulativeFrequencies.get(aa);
-        double randNum = rng.nextDouble();
-        int index = 0;
-        for (double f: cumulativeFrequencies) {
-            if (randNum <= f) {
-                break;
-            }
-            index++;
-        }
-        String codon = aaMap.get(aa).get(index).getKey();
-        return codon;
-    }
-
-    public Transcript run(String peptide, Set<RBSOption> ignores) throws Exception {        
-        //Choose codons for each amino acid
         String[] codons = new String[peptide.length()];
-        Random rng = new Random(23498752);
-        for(int i=0; i < peptide.length(); i++) {
-            String aa = Character.toString(peptide.charAt(i));
-            //Use Monte Carlo method to pick codon at random
-            String codon = getCodon(aa, rng);
-            codons[i] = codon;
-        }
-        
-        //Choose an RBS
         StringBuilder cds = new StringBuilder();
-        for(String codon : codons) {
-            cds.append(codon);
+        for(int i = 0; i < peptide.length(); i++) {
+            String aaWindow = peptide.substring(i, Math.min(i + 3, peptide.length()));
+            String preamble;
+            if (i >= 3) {
+                preamble = cds.substring(i * 3 - 9, i * 3);
+            } else {
+                preamble = "";
+            }
+            List<String> synCodonsList = synonymousCodons(aaWindow);
+            Comparator<String> compareByGC = Comparator.comparingDouble(this::gcContent);
+            if (gcContent(cds.toString()) < 0.5) {
+                synCodonsList.sort(compareByGC.reversed());
+            } else {
+                synCodonsList.sort(compareByGC);
+            }
+            for (String synCodons: synCodonsList) {
+                String testSeq = preamble + synCodons;
+                if (forbiddenSeqChecker.run(testSeq)) {
+                    cds.append(synCodons, 0, 3);
+                    codons[i] = synCodons.substring(0, 3);
+                    break;
+                }
+            }
         }
+        //Choose an rbs
         RBSOption selectedRBS = rbsChooser.run(cds.toString(), ignores);
-        
         //Construct the Transcript and return it
         Transcript out = new Transcript(selectedRBS, peptide, codons);
         return out;
+    }
+
+    private double gcContent(String seq) {
+        double gc = 0;
+        for (int i = 0; i < seq.length(); i++) {
+            char base = seq.charAt(i);
+            if (base == 'G' || base == 'C') {
+                gc++;
+            }
+        }
+        return gc / seq.length();
+    }
+
+    private List<String> synonymousCodons(String aaWindow) {
+        return synonymousCodons(aaWindow, new ArrayList<>());
+    }
+
+    /**
+     * Given a String aaWindow of amino acids,
+     * return all combinations of synonymous
+     * codons that can possibly encode it in a List.
+     * @param aaWindow Peptide sequence
+     * @return synCodons
+     */
+    private List<String> synonymousCodons(String aaWindow, List<String> synCodons) {
+        String[] currCodons = aaMap.get(aaWindow.charAt(0));
+        if (aaWindow.length() == 1) {
+            Collections.addAll(synCodons, currCodons);
+            return synCodons;
+        }
+        synonymousCodons(aaWindow.substring(1), synCodons);
+        String[] synCodonArr = synCodons.toArray(new String[synCodons.size()]);
+        synCodons.clear();
+        for (String synCodon: synCodonArr) {
+            for (String validCodon: currCodons) {
+                synCodons.add(validCodon + synCodon);
+            }
+        }
+        return synCodons;
     }
 }

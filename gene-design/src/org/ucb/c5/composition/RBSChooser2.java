@@ -15,12 +15,14 @@ import org.ucb.c5.utils.FileUtils;
  * highly-expressed proteins in E. coli.
  *
  * @author J. Christopher Anderson
+ * @author Stephen Lin
  */
 public class RBSChooser2 {
 
     private List<RBSOption> rbss;
     private Translate translator;
     private CalcEditDistance calc;
+    private HairpinCounter counter;
 
     public void initiate() throws Exception {
         rbss = new ArrayList<>();
@@ -28,6 +30,8 @@ public class RBSChooser2 {
         translator.initiate();
         calc = new CalcEditDistance();
         calc.initiate();
+        counter = new HairpinCounter();
+        counter.initiate();
 
         String coli_genes = FileUtils.readFile("src/org/ucb/c5/composition/data/coli_genes.txt");
         String[] lines = coli_genes.split("\\r|\\r?\\n");
@@ -46,18 +50,13 @@ public class RBSChooser2 {
             String name =  values[0];
             String rbs = values[1];
             String cds = nameToCds.get(name);
-            String first6aas = getFirst6aas(cds, translator);
+            String first6aas = getFirst6aas(cds);
             rbss.add(new RBSOption(name, null, rbs, cds, first6aas));
         }
     }
 
-    private String getFirst6aas(String cds, Translate translator) {
-        StringBuilder aas = new StringBuilder();
-        for (int i = 0; i < 6; i++) {
-            String aa = translator.run(cds.substring(3 * i, 3 * i + 3));
-            aas.append(aa);
-        }
-        return aas.toString();
+    private String getFirst6aas(String cds) {
+        return translator.run(cds.substring(0, 18));
     }
 
     /**
@@ -73,13 +72,17 @@ public class RBSChooser2 {
      */
     public RBSOption run(String cds, Set<RBSOption> ignores) throws Exception {
         if (!cds.matches("([ATCG])+"))
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("cds contains non-nucleotide character");
+        if (cds.length() < 18) {
+            throw new IllegalArgumentException("cds must be 18 bases in length");
+        }
+
         Map<Integer, List<RBSOption>> RbsScores = new HashMap<>();
         for (RBSOption rbs: rbss) {
             if (ignores.contains(rbs)) {
                 continue;
             }
-            String cdsFirst6aas = getFirst6aas(cds, translator);
+            String cdsFirst6aas = getFirst6aas(cds);
             String rbsFirst6aas = rbs.getFirst6aas();
             int editDist = calc.run(cdsFirst6aas, rbsFirst6aas);
             if (!RbsScores.containsKey(editDist)) {
@@ -99,10 +102,9 @@ public class RBSChooser2 {
         }
         double leastHairpins = Double.POSITIVE_INFINITY;
         RBSOption bestRbs = null;
-        HairpinCounter counter = new HairpinCounter();
-        counter.initiate();
         for (RBSOption rbs: bestMatchRbss) {
-            double hairpins = counter.run(rbs.getRbs());
+            int hairpinEndIndex = Math.min(36, cds.length());
+            double hairpins = counter.run(rbs.getRbs() + cds.substring(0, hairpinEndIndex));
             if (hairpins < leastHairpins) {
                 leastHairpins = hairpins;
                 bestRbs = rbs;

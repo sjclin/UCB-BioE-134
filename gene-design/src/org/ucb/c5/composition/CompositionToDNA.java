@@ -38,9 +38,12 @@ public class CompositionToDNA {
             mRNAs.add(mrna);
         }
 
-        //Construct the output dna
+        //Construct the output DNA
         Construct out = new Construct(mRNAs, comp.getPromoter(), comp.getTerminator());
-        //seek construct dnaseq and thows into the checkers to check, if return false in checker-> throws exception, if passes all checkers-> return out
+        //seek construct DNAseq and thows into the checkers to check, if return false in checker-> throws exception, if passes all checkers-> return out
+        String DNAseq = out.toSeq();
+
+
         return out;
     }
 
