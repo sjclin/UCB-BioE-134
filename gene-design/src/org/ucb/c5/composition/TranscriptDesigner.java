@@ -2,10 +2,11 @@ package org.ucb.c5.composition;
 
 import javafx.util.Pair;
 import org.ucb.c5.composition.checkers.ForbiddenSequenceChecker;
+import org.ucb.c5.composition.checkers.RepeatSequenceChecker;
 import org.ucb.c5.composition.model.RBSOption;
 import org.ucb.c5.composition.model.Transcript;
+import org.ucb.c5.sequtils.HairpinCounter;
 import org.ucb.c5.sequtils.Translate;
-import org.ucb.c5.utils.FileUtils;
 
 import java.util.*;
 
@@ -23,6 +24,9 @@ public class TranscriptDesigner {
     private ForbiddenSequenceChecker forbiddenSeqChecker;
     private Map<Character, String[]> aaMap;
     private String aaCharacters;
+    private Comparator<String> gcComparator;
+    private HairpinCounter hpc;
+    private RepeatSequenceChecker repSeqChecker;
 
     public void initiate() throws Exception {
         //Initialize the RBSChooser
@@ -48,38 +52,68 @@ public class TranscriptDesigner {
         }
 
         aaCharacters = "([ARNDCQEGHILKMFPSTWYV])+";
+
+        gcComparator = Comparator.comparingDouble(this::gcContent);
+
+        hpc = new HairpinCounter();
+        hpc.initiate();
+
+        repSeqChecker = new RepeatSequenceChecker();
     }
 
     public Transcript run(String peptide, Set<RBSOption> ignores) throws Exception {
-        //Choose codons for each amino acid to generate cds
         if (!peptide.matches(aaCharacters)) {
             throw new IllegalArgumentException("peptide contains non-amino acid character");
         }
+        if (peptide.charAt(0) != 'M') {
+            throw new IllegalArgumentException("peptide must start with methionine");
+        }
         String[] codons = new String[peptide.length()];
         StringBuilder cds = new StringBuilder();
+        //Use sliding window approach to choose codons
         for(int i = 0; i < peptide.length(); i++) {
             String aaWindow = peptide.substring(i, Math.min(i + 3, peptide.length()));
-            String preamble;
-            if (i >= 3) {
-                preamble = cds.substring(i * 3 - 9, i * 3);
-            } else {
-                preamble = "";
-            }
+            int start = Math.max(0, i * 3 - 9);
+            int end = Math.min(i * 3, cds.length());
+            String preamble = cds.substring(start, end);
             List<String> synCodonsList = synonymousCodons(aaWindow);
-            Comparator<String> compareByGC = Comparator.comparingDouble(this::gcContent);
+            //Sort synCodons such that codons balancing GC content are prioritized
             if (gcContent(cds.toString()) < 0.5) {
-                synCodonsList.sort(compareByGC.reversed());
+                synCodonsList.sort(gcComparator.reversed());
             } else {
-                synCodonsList.sort(compareByGC);
+                synCodonsList.sort(gcComparator);
             }
-            for (String synCodons: synCodonsList) {
-                String testSeq = preamble + synCodons;
-                if (forbiddenSeqChecker.run(testSeq)) {
-                    cds.append(synCodons, 0, 3);
-                    codons[i] = synCodons.substring(0, 3);
-                    break;
+            List<String> validCodons = new ArrayList<>();
+            List<Pair<String, Double>> hpScores = new ArrayList<>();
+            for (String sCodons: synCodonsList) {
+                String testSeq = preamble + sCodons;
+                if (forbiddenSeqChecker.run(testSeq)) { // && repSeqChecker.run(cds.toString())) for cds.length() >= 10 {
+                    validCodons.add(sCodons);
+                    hpScores.add(new Pair<>(sCodons, hpc.run(testSeq)));
                 }
             }
+            if (validCodons.isEmpty()) {
+                throw new Exception("no valid codons found for peptide " + "peptide");
+            }
+            //Sort hpCodons such that codons minimizing secondary structure are prioritized
+            hpScores.sort(Comparator.comparing(Pair::getValue));
+            List<String> hpCodons = new ArrayList<>();
+            for (Pair<String, Double> p: hpScores) {
+                hpCodons.add(p.getKey());
+            }
+            int bestRank = Integer.MAX_VALUE;
+            String bestCodons = "";
+            //Choose the codon that balances GC content and minimizes secondary structure
+            for (int j = 0; j < validCodons.size(); j++) {
+                String vCodons = validCodons.get(j);
+                int rank = j + hpCodons.indexOf(vCodons);
+                if (rank < bestRank) {
+                    bestRank = rank;
+                    bestCodons = vCodons;
+                }
+            }
+            cds.append(bestCodons, 0, 3);
+            codons[i] = bestCodons.substring(0, 3);
         }
         //Choose an rbs
         RBSOption selectedRBS = rbsChooser.run(cds.toString(), ignores);
