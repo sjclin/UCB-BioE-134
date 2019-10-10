@@ -89,11 +89,11 @@ public class TranscriptDesigner {
                 String testSeq = preamble + sCodons;
                 if (forbiddenSeqChecker.run(testSeq)) { // && repSeqChecker.run(cds.toString())) for cds.length() >= 10 {
                     validCodons.add(sCodons);
-                    hpScores.add(new Pair<>(sCodons, hpc.run(testSeq)));
+                    hpScores.add(new Pair<>(sCodons, hpc.run(testSeq))); //TODO: change to hpc.run(cds.toString() + sCodons) or similar for correctness
                 }
             }
             if (validCodons.isEmpty()) {
-                throw new Exception("no valid codons found for peptide " + "peptide");
+                throw new Exception("no valid codons found for peptide " + peptide);
             }
             //Sort hpCodons such that codons minimizing secondary structure are prioritized
             hpScores.sort(Comparator.comparing(Pair::getValue));
