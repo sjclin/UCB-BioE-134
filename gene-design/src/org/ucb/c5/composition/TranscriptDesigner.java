@@ -1,8 +1,7 @@
 package org.ucb.c5.composition;
 
 import javafx.util.Pair;
-import org.ucb.c5.composition.checkers.ForbiddenSequenceChecker;
-import org.ucb.c5.composition.checkers.RepeatSequenceChecker;
+import org.ucb.c5.composition.checkers.*;
 import org.ucb.c5.composition.model.RBSOption;
 import org.ucb.c5.composition.model.Transcript;
 import org.ucb.c5.sequtils.HairpinCounter;
@@ -26,7 +25,8 @@ public class TranscriptDesigner {
     private String aaCharacters;
     private Comparator<String> gcComparator;
     private HairpinCounter hpc;
-    private RepeatSequenceChecker repSeqChecker;
+    private RNAInterferenceChecker RNAIntChecker;
+    private CAIChecker CAIChecker;
 
     public void initiate() throws Exception {
         //Initialize the RBSChooser
@@ -58,7 +58,11 @@ public class TranscriptDesigner {
         hpc = new HairpinCounter();
         hpc.initiate();
 
-        repSeqChecker = new RepeatSequenceChecker();
+        RNAIntChecker = new RNAInterferenceChecker();
+        RNAIntChecker.initiate();
+
+        CAIChecker = new CAIChecker();
+        CAIChecker.initiate();
     }
 
     public Transcript run(String peptide, Set<RBSOption> ignores) throws Exception {
@@ -70,26 +74,33 @@ public class TranscriptDesigner {
         }
         String[] codons = new String[peptide.length()];
         StringBuilder cds = new StringBuilder();
-        //Use sliding window approach to choose codons
-        for(int i = 0; i < peptide.length(); i++) {
+        //Use modified sliding window approach to choose codons
+        for (int i = 0; i < peptide.length(); i++) {
             String aaWindow = peptide.substring(i, Math.min(i + 3, peptide.length()));
             int start = Math.max(0, i * 3 - 9);
             int end = Math.min(i * 3, cds.length());
             String preamble = cds.substring(start, end);
-            List<String> synCodonsList = synonymousCodons(aaWindow);
-            //Sort synCodons such that codons balancing GC content are prioritized
-            if (gcContent(cds.toString()) < 0.5) {
-                synCodonsList.sort(gcComparator.reversed());
-            } else {
-                synCodonsList.sort(gcComparator);
-            }
+
             List<String> validCodons = new ArrayList<>();
             List<Pair<String, Double>> hpScores = new ArrayList<>();
+            List<String> synCodonsList = synonymousCodons(aaWindow);
+            //Sort synCodons such that codons balancing GC content are prioritized
+            sortCodonsByGC(synCodonsList, cds.toString());
+
+            //Collect codons that would not introduce forbidden sequences or excessive RNA interference
             for (String sCodons: synCodonsList) {
+                String checkSeq = cds.toString() + sCodons;
                 String testSeq = preamble + sCodons;
-                if (forbiddenSeqChecker.run(testSeq)) { // && repSeqChecker.run(cds.toString())) for cds.length() >= 10 {
+                boolean acceptableCodons;
+                if (checkSeq.length() < 16) {
+                    acceptableCodons = forbiddenSeqChecker.run(testSeq);
+                } else {
+                    String RNASeq = checkSeq.substring(Math.max(0, checkSeq.length() - 20));
+                    acceptableCodons = forbiddenSeqChecker.run(testSeq) && RNAIntChecker.run(RNASeq);
+                }
+                if (acceptableCodons) {
                     validCodons.add(sCodons);
-                    hpScores.add(new Pair<>(sCodons, hpc.run(testSeq))); //TODO: change to hpc.run(cds.toString() + sCodons) or similar for correctness
+                    hpScores.add(new Pair<>(sCodons, hpc.run(checkSeq)));
                 }
             }
             if (validCodons.isEmpty()) {
@@ -101,17 +112,8 @@ public class TranscriptDesigner {
             for (Pair<String, Double> p: hpScores) {
                 hpCodons.add(p.getKey());
             }
-            int bestRank = Integer.MAX_VALUE;
-            String bestCodons = "";
-            //Choose the codon that balances GC content and minimizes secondary structure
-            for (int j = 0; j < validCodons.size(); j++) {
-                String vCodons = validCodons.get(j);
-                int rank = j + hpCodons.indexOf(vCodons);
-                if (rank < bestRank) {
-                    bestRank = rank;
-                    bestCodons = vCodons;
-                }
-            }
+            //Choose the codon that balances GC content, minimizes secondary structure, and maintains good CAI
+            String bestCodons = getBestCodons(validCodons, hpCodons);
             cds.append(bestCodons, 0, 3);
             codons[i] = bestCodons.substring(0, 3);
         }
@@ -122,6 +124,13 @@ public class TranscriptDesigner {
         return out;
     }
 
+    /**
+     * Given a String seq of nucleotides,
+     * return the GC content of seq.
+     * @param seq Nucleotide sequence
+     * @return gc GC content of seq
+     * @author Stephen Lin
+     */
     private double gcContent(String seq) {
         double gc = 0;
         for (int i = 0; i < seq.length(); i++) {
@@ -133,6 +142,15 @@ public class TranscriptDesigner {
         return gc / seq.length();
     }
 
+    /**
+     * Given a String aaWindow of amino acids,
+     * return all combinations of synonymous
+     * codons that can possibly encode it in a List.
+     * A helper method.
+     * @param aaWindow Peptide sequence
+     * @return synCodons Synonymous codons
+     * @author Stephen Lin
+     */
     private List<String> synonymousCodons(String aaWindow) {
         return synonymousCodons(aaWindow, new ArrayList<>());
     }
@@ -142,7 +160,8 @@ public class TranscriptDesigner {
      * return all combinations of synonymous
      * codons that can possibly encode it in a List.
      * @param aaWindow Peptide sequence
-     * @return synCodons
+     * @return synCodons Synonymous codons
+     * @author Stephen Lin
      */
     private List<String> synonymousCodons(String aaWindow, List<String> synCodons) {
         String[] currCodons = aaMap.get(aaWindow.charAt(0));
@@ -159,5 +178,45 @@ public class TranscriptDesigner {
             }
         }
         return synCodons;
+    }
+    
+    /**
+     * Given a List of codons
+     * and a corresponding coding sequence String,
+     * sort the list of synonymous codons so
+     * that codons balancing GC content appear first.
+     * @param codons Synonymous codons
+     * @param cds Coding sequence
+     * @author Stephen Lin           
+     */
+    private void sortCodonsByGC(List<String> codons, String cds) {
+        if (gcContent(cds) < 0.5) {
+            codons.sort(gcComparator.reversed());
+        } else {
+            codons.sort(gcComparator);
+        }
+    }
+
+    /**
+     * Given Lists of codons sorted
+     * for optimal GC content and secondary
+     * structure respectively, choose the best
+     * codon while taking CAI into account.
+     * @param gcCodons Codons by GC content
+     * @param hpCodons Codons by secondary structure
+     * @author Stephen Lin
+     */
+    private String getBestCodons(List<String> gcCodons, List<String> hpCodons) {
+        double bestScore = Double.MAX_VALUE;
+        String bestCodons = "";
+        for (int i = 0; i < gcCodons.size(); i++) {
+            String vCodons = gcCodons.get(i);
+            double score = i + 2 * hpCodons.indexOf(vCodons) - 5 * CAIChecker.run(vCodons);
+            if (score < bestScore) {
+                bestScore = score;
+                bestCodons = vCodons;
+            }
+        }
+        return bestCodons;
     }
 }
