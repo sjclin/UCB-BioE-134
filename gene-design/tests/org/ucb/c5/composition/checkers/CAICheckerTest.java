@@ -7,14 +7,12 @@ import org.ucb.c5.composition.model.Composition;
 import org.ucb.c5.composition.model.Construct;
 import org.ucb.c5.composition.model.Host;
 import org.ucb.c5.composition.model.Transcript;
-import org.ucb.c5.utils.FileUtils;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * A class to test the Codon Adaptation Index
@@ -101,7 +99,8 @@ public class CAICheckerTest {
         for (String codon : codons) {
             cds.append(codon);
         }
-        assertTrue(checker.run(cds.toString()) > 0.5);
+        System.out.println(checker.run(cds.toString()));
+        assertTrue(checker.run(cds.toString()) >= 0.5);
     }
 
     /**
@@ -128,14 +127,16 @@ public class CAICheckerTest {
         for (String codon : codons) {
             cds.append(codon);
         }
-        assertTrue(checker.run(cds.toString()) > 0.5);
+        System.out.println(checker.run(cds.toString()));
+        assertTrue(checker.run(cds.toString()) >= 0.5);
     }
 
     /**
      * Tests if the CAI is permissible
      * for a sequence containing a
      * high frequency of arginine, which
-     *
+     * has a relatively low CAI in the
+     * reference set used.
      *
      * @author Stephen Lin
      */

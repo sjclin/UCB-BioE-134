@@ -1,11 +1,12 @@
 package org.ucb.c5.composition;
 
 import javafx.util.Pair;
-import org.ucb.c5.composition.checkers.*;
+import org.ucb.c5.composition.checkers.CAIChecker;
+import org.ucb.c5.composition.checkers.ForbiddenSequenceChecker;
+import org.ucb.c5.composition.checkers.RNAInterferenceChecker;
 import org.ucb.c5.composition.model.RBSOption;
 import org.ucb.c5.composition.model.Transcript;
 import org.ucb.c5.sequtils.HairpinCounter;
-import org.ucb.c5.sequtils.Translate;
 
 import java.util.*;
 
@@ -19,7 +20,6 @@ import java.util.*;
 public class TranscriptDesigner {
 
     private RBSChooser2 rbsChooser;
-    private Translate translator;
     private ForbiddenSequenceChecker forbiddenSeqChecker;
     private Map<Character, String[]> aaMap;
     private String aaCharacters;
@@ -32,9 +32,6 @@ public class TranscriptDesigner {
         //Initialize the RBSChooser
         rbsChooser = new RBSChooser2();  //Use new algorithm to choose RBS
         rbsChooser.initiate();
-
-        translator = new Translate();
-        translator.initiate();
 
         forbiddenSeqChecker = new ForbiddenSequenceChecker();
         forbiddenSeqChecker.initiate();
@@ -95,8 +92,7 @@ public class TranscriptDesigner {
                 if (checkSeq.length() < 16) {
                     acceptableCodons = forbiddenSeqChecker.run(testSeq);
                 } else {
-                    String RNASeq = checkSeq.substring(Math.max(0, checkSeq.length() - 20));
-                    acceptableCodons = forbiddenSeqChecker.run(testSeq) && RNAIntChecker.run(RNASeq);
+                    acceptableCodons = forbiddenSeqChecker.run(testSeq) && RNAIntChecker.run(checkSeq);
                 }
                 if (acceptableCodons) {
                     validCodons.add(sCodons);
@@ -181,8 +177,8 @@ public class TranscriptDesigner {
     }
     
     /**
-     * Given a List of codons
-     * and a corresponding coding sequence String,
+     * Given a List of codons and
+     * a corresponding coding sequence String,
      * sort the list of synonymous codons so
      * that codons balancing GC content appear first.
      * @param codons Synonymous codons
@@ -202,6 +198,8 @@ public class TranscriptDesigner {
      * for optimal GC content and secondary
      * structure respectively, choose the best
      * codon while taking CAI into account.
+     * Uses a linear combination of metrics
+     * to determine the best codon.
      * @param gcCodons Codons by GC content
      * @param hpCodons Codons by secondary structure
      * @author Stephen Lin
@@ -211,7 +209,7 @@ public class TranscriptDesigner {
         String bestCodons = "";
         for (int i = 0; i < gcCodons.size(); i++) {
             String vCodons = gcCodons.get(i);
-            double score = i + 2 * hpCodons.indexOf(vCodons) - 5 * CAIChecker.run(vCodons);
+            double score = i + 2 * hpCodons.indexOf(vCodons) - 3 * CAIChecker.run(vCodons);
             if (score < bestScore) {
                 bestScore = score;
                 bestCodons = vCodons;
